@@ -1,6 +1,7 @@
+import sys
 import math
 
-file = open("busy_day.in","rw+")
+file = open(sys.argv[1],"rw+")
 
 [r,c,Drones,Deadline,MaxPayload] = file.readline().split( )
 ProductTypes = file.readline().split( )
@@ -35,7 +36,7 @@ for i in range (0,NumberOfOrders):
 
 file.close()
 
-file = open("greedy_busy.out","rw+")
+file = open(sys.argv[2],"rw+")
 ##Validator
 NumberOfCommands = file.readline().split( )
 if len(NumberOfCommands)!=1:
