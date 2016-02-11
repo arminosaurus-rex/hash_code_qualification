@@ -61,22 +61,95 @@ vector<Operation> serve(int drone_id, int wh_id, int order_id) {
   vector<Operation> ret;
 
   vector<int> order = order_to_types(orders[order_id]);
-  for (int i = 0; i < types; ++i) {
-    while (order[i] > 0) {
-      int take = min(order[i], int(payload / weights[i]));
-      ret.push_back({drone_id, op_load, wh_id, i, take});
-      ret.push_back({drone_id, op_deliver, order_id, i, take});
-      order[i] -= take;
+  int cur_weight = 0;
+
+  vector<Operation> loads;
+  vector<Operation> delis;
+
+  for (int i = 0; i < types;) {
+    if (order[i] == 0) {
+      ++i;
+      continue;
     }
+
+    int take = min(order[i], int((payload - cur_weight) / weights[i]));
+    order[i] -= take;
+    cur_weight += take * weights[i];
+
+    int available = warehouses_types[wh_id][i];
+    if (available < take) {
+      return {};
+    }
+    else {
+      warehouses_types[wh_id][i] -= take;
+    }
+
+    if (take > 0) {
+      loads.push_back({drone_id, op_load, wh_id, i, take});
+      delis.push_back({drone_id, op_deliver, order_id, i, take});
+    }
+    else {
+	ret.insert(ret.end(), loads.begin(), loads.end());
+	ret.insert(ret.end(), delis.begin(), delis.end());
+	loads.clear();
+	delis.clear();
+	cur_weight = 0;
+    }
+  }
+  ret.insert(ret.end(), loads.begin(), loads.end());
+  ret.insert(ret.end(), delis.begin(), delis.end());
+  return ret;
+}
+
+vector<vector<int>> order_per_wh;
+
+void allocate_orders() {
+  order_per_wh.resize(warehouses);
+
+  for (int i = 0; i < num_orders; ++i) {
+    int best_wh = 0;
+    int best_score = time(warehouses_coords[0], orders[i].coords);
+    for (int wh = 1; wh < warehouses; ++wh) {
+      int cur_score = time(warehouses_coords[wh], orders[i].coords);
+      if (cur_score < best_score) {
+	best_score = cur_score;
+	best_wh = wh;
+      }
+    }
+    order_per_wh[best_wh].push_back(i);
+  }
+}
+
+vector<vector<int>> drone_per_wh;
+
+void allocate_drones() {
+  drone_per_wh.resize(warehouses);
+
+  for (int i = 0; i < drones; ++i) {
+    drone_per_wh[i % warehouses].push_back(i);
+  }
+}
+
+vector<Operation> serve_wh(int wh) {
+  vector<Operation> ret;
+  for (int i = 0; i < order_per_wh[wh].size(); ++i) {
+    int max_drones = drone_per_wh[wh].size();
+    vector<Operation> cur = serve(drone_per_wh[wh][i % max_drones],
+				  wh, order_per_wh[wh][i]);
+    ret.insert(ret.end(), cur.begin(), cur.end());
   }
   return ret;
 }
 
 vector<Operation> serve_all() {
   vector<Operation> ret;
-  for (int i = 0; i < num_orders; ++i) {
-    vector<Operation> cur = serve(0, 0, i);
-    ret.insert(ret.end(), cur.begin(), cur.end());
+  for (int wh = 0; wh < warehouses; ++wh) {
+    for (int i = 0; i < order_per_wh[wh].size(); ++i) {
+      int max_drones = drone_per_wh[wh].size();
+      vector<Operation> cur = serve(drone_per_wh[wh][i % max_drones],
+				    wh, order_per_wh[wh][i]);
+      ret.insert(ret.end(), cur.begin(), cur.end());
+    }
   }
   return ret;
 }
@@ -102,14 +175,9 @@ vector<int> find_times(const vector<Operation>& ops) {
   return ret;
 }
 
-void print_intermediate(const vector<Operation>& ops, const vector<int>& times) {
-  assert(ops.size() == times.size());
-  assert(ops.size() % 2 == 0);
-
-  cout << ops.size() / 2 << endl;
-
-  for (int i = 0; i < ops.size(); ++i) {
-    assert((i % 2 == 0) == (ops[i].operaton == op_load));
+void print_intermediate(const vector<Operation>& ops,
+			const vector<int>& times) {
+  for (int i = 0; i < ops.size() && times[i] < turns; ++i) {
     if (ops[i].operaton == op_load) {
       cout << ops[i].wh_cust_id << " "
 	   << times[i];
@@ -125,23 +193,24 @@ void print_intermediate(const vector<Operation>& ops, const vector<int>& times) 
   }
 }
 
-void print_final(const vector<Operation>& ops, const vector<int>& times) {
-  assert(ops.size() == times.size());
-  assert(ops.size() % 2 == 0);
+void print_final(const vector<Operation>& ops, const vector<int>& times,
+		 int to_print) {
+  cout << to_print << endl;
 
-  cout << ops.size() / 2 << endl;
-
-  for (int i = 0; i < ops.size(); ++i) {
-    assert((i % 2 == 0) == (ops[i].operaton == op_load));
-    cout << ops[i].wh_cust_id << " "
-	 << times[i];
-    for (int j = 0; j < types; ++j) {
-      if (ops[i].prod_type == j) {
-	cout << " " << ops[i].num_its;
-      }
-      else {
-	cout << " " << 0;
-      }
+  for (int i = 0; i < to_print; ++i) {
+    if (ops[i].operaton == op_load) {
+      cout << ops[i].drone_id << " "
+	   << "L "
+	   << ops[i].wh_cust_id << " "
+	   << ops[i].prod_type << " "
+	   << ops[i].num_its << endl;
+    }
+    else {
+      cout << ops[i].drone_id << " "
+	   << "D "
+	   << ops[i].wh_cust_id << " "
+	   << ops[i].prod_type << " "
+	   << ops[i].num_its << endl;
     }
   }
 }
@@ -193,7 +262,15 @@ int main() {
   assert(warehouses_types.size() == warehouses);
   assert(orders.size() == num_orders);
 
-  vector<Operation> ops = serve_all();
-  vector<int> times = find_times(ops);
-  print_intermediate(ops, times);
+  allocate_orders();
+  allocate_drones();
+
+  for (int wh = 0; wh < warehouses; ++wh) {
+    vector<Operation> ops = serve_wh(wh);
+    vector<int> times = find_times(ops);
+    print_intermediate(ops, times);
+  }
+  //  vector<Operation> ops = serve_all();
+  //  vector<int> times = find_times(ops);
+
 }
