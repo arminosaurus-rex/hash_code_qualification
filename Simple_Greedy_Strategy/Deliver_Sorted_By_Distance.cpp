@@ -10,6 +10,8 @@ using namespace std;
 typedef pair<int, int> PII;
 typedef pair<int, PII> PIPII;
 
+vector<string> output;
+
 const int max_number_products = 2000; // See redundancy.in
 const int max_number_warehouses = 16; // See redundacy.in
 const int max_number_customers = 1250; // busy day.in
@@ -36,16 +38,20 @@ vector<PII> position_drones;
 vector<PIPII> possible_jobs;
 vector<PII> delivery_commands;
 
-int distance_warehouse_customer(int whs, int cust){
-  return compute_distance(row_warehouse[whs], col_warehouse[whs], row_customer[cust], col_customer[cust]);
-}
-
 int compute_distance(int r1, int c1, int r2, int c2){
   return ceil(sqrt((r1 - r2) * (r1 - r2) + (c1 - c2) * (c1 - c2)));
 }
 
+int distance_warehouse_customer(int whs, int cust){
+  return compute_distance(row_warehouse[whs], col_warehouse[whs], row_customer[cust], col_customer[cust]);
+}
+
 int my_min(int a, int b){
   return a<b? a:b;
+}
+
+int three_min(int a, int b, int c){
+  return my_min(a, my_min(b, c));
 }
 
 
@@ -61,6 +67,7 @@ int main(){
   // Warehouses
   scanf("%d ", &num_warehouses);
   for(int i=0; i < num_warehouses; i++) scanf("%d %d ", &row_warehouse[i], &col_warehouse[i]);
+
   for(int whs=0; whs < num_warehouses; whs++){
     for(int i=0; i < num_products; i++){
       scanf("%d ", &availability_warehouses[whs][i]);
@@ -69,7 +76,7 @@ int main(){
 
   // Orders
   scanf("%d ", &num_customers);
-  for(int cust=0; cusy < num_customers; cust++){
+  for(int cust=0; cust < num_customers; cust++){
     scanf("%d %d ", &row_customer[cust], &col_customer[cust]);
     scanf("%d ", &num_orders_customer[cust]);
     for(int i=0; i<num_orders_customer[cust]; i++){
@@ -91,9 +98,12 @@ int main(){
   int current_time = 0;
   while(current_time <= deadline){
 
+    //printf("%d\n", current_time);
+
     // Set current time to be the minimum over all the times where the drones are available
     int drone_time = position_drones[0].second;
     for(int i=1; i < num_drones; i++) drone_time = my_min(drone_time, position_drones[i].second);
+    current_time = drone_time;
 
     possible_jobs.clear();
     for(int cust=0; cust<num_customers; cust++){
@@ -115,11 +125,16 @@ int main(){
           // Have already satisfied the order on this
           if(overview_orders_customers[cust][prod] == 0) continue;
           // Get the maximum number of elements we can load
-          int max_elements = (int)((max_load - current_load) / weight_products[prod]);
-          if(availability_warehouses[current_warehouse][prod] > 0 && current_load + weight_products[prod] <= max_load){
-            current_load += my_min(max_elements, availability_warehouses[current_warehouse][prod]) * weight_products[prod];
-            load_operations += 1;
-          }
+          int max_elements = three_min(availability_warehouses[current_warehouse][prod],
+                                (int)((max_load - current_load) / weight_products[prod]),
+                              overview_orders_customers[cust][prod]);
+
+
+          if(max_elements == 0) continue;
+          if(max_elements < 0) printf("Error\n");
+
+          current_load += max_elements * weight_products[prod];
+          load_operations += 1;
         }
 
         if(current_load > 0){
@@ -131,7 +146,10 @@ int main(){
       }
     }
 
-    if(possible_jobs.empty()) break;
+    if(possible_jobs.empty()){
+      //printf("We are here?\n");
+      break;
+    }
     sort(possible_jobs.begin(), possible_jobs.end());
 
     PIPII nxt_job = possible_jobs[0];
@@ -148,31 +166,53 @@ int main(){
 
     for(int i=0; i<orders_customer[nxt_customer].size(); i++){
       int prod = orders_customer[nxt_customer][i];
+      if(i > 0 && orders_customer[nxt_customer][i-1] == prod) continue;
       if(overview_orders_customers[nxt_customer][prod] == 0) continue;
-      if(availability_warehouses[current_warehouse][prod] > 0 && current_load + weight_products[prod] <= max_load){
-        current_load += weight_products[prod];
-        printf("%d L %d", usd_drone, position_drones[usd_drone].first);
-        int max_elements = my_min((int)((max_load - current_load) / weight_products[prod]), availability_warehouses[current_warehouse][prod]);
-        printf(" %d %d\n", prod, max_elements);
-        // Update availability of objects and fulfilled works
-        availability_warehouses[current_warehouse][prod] -= max_elements;
-        num_orders_customer[nxt_customer] -= max_elements;
-        overview_orders_customers[nxt_customer][prod] -= max_elements;
-        delivery_commands.push_back(make_pair(prod, max_elements));
-      }
+
+      int max_elements = three_min(availability_warehouses[current_warehouse][prod],
+                            (int)((max_load - current_load) / weight_products[prod]),
+                          overview_orders_customers[nxt_customer][prod]);
+      if(max_elements == 0) continue;
+
+      current_load += max_elements * weight_products[prod];
+      string s = to_string(usd_drone) + " L " + to_string(position_drones[usd_drone].first) + " "  + to_string(prod) + " " + to_string(max_elements);
+      output.push_back(s);
+      //printf("%d L %d %d %d\n", usd_drone, position_drones[usd_drone].first, prod, max_elements);
+      // Update availability of objects and fulfilled works
+      availability_warehouses[current_warehouse][prod] -= max_elements;
+      num_orders_customer[nxt_customer] -= max_elements;
+      overview_orders_customers[nxt_customer][prod] -= max_elements;
+      delivery_commands.push_back(make_pair(prod, max_elements));
     }
+
 
     // All Loading done, now set delivery
     for(int i=0; i<delivery_commands.size(); i++){
-        printf("%d D %d %d %d\n", usd_drone, nxt_customer, delivery_commands[i].first, delivery_commands[i].second);
+        //printf("%d D %d %d %d\n", usd_drone, nxt_customer, delivery_commands[i].first, delivery_commands[i].second);
+        string s = to_string(usd_drone) + " D "  + to_string(nxt_customer) + " " + to_string(delivery_commands[i].first) + " " + to_string(delivery_commands[i].second);
+        output.push_back(s);
     }
 
     // Send the drone to a random warehouse.
     int next_warehouse = rand() % num_warehouses;
     int travel_time = distance_warehouse_customer(next_warehouse, nxt_customer);
-    int new_time = position_drones[usd_drone] + nxt_job.first + travel_time;
+    int new_time = position_drones[usd_drone].second + nxt_job.first + travel_time;
     position_drones[usd_drone] = make_pair(next_warehouse, new_time);
 
   }
+
+  for(int i=0; i<num_customers; i++){
+    printf("%d ", num_orders_customer[i]);
+  }
+  printf("\n");
+
+  //printf("%d\n", output.size());
+  /*
+  cout << output.size() << endl;
+  for(int i=0; i<output.size(); i++){
+    cout << output[i] << endl;
+  }
+  */
+
   return 0;
 }
