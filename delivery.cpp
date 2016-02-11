@@ -110,6 +110,29 @@ void print_intermediate(const vector<Operation>& ops, const vector<int>& times) 
 
   for (int i = 0; i < ops.size(); ++i) {
     assert((i % 2 == 0) == (ops[i].operaton == op_load));
+    if (ops[i].operaton == op_load) {
+      cout << ops[i].wh_cust_id << " "
+	   << times[i];
+      for (int j = 0; j < types; ++j) {
+	if (ops[i].prod_type == j) {
+	  cout << " " << ops[i].num_its;
+	}
+	else {
+	  cout << " " << 0;
+	}
+      }
+    }
+  }
+}
+
+void print_final(const vector<Operation>& ops, const vector<int>& times) {
+  assert(ops.size() == times.size());
+  assert(ops.size() % 2 == 0);
+
+  cout << ops.size() / 2 << endl;
+
+  for (int i = 0; i < ops.size(); ++i) {
+    assert((i % 2 == 0) == (ops[i].operaton == op_load));
     cout << ops[i].wh_cust_id << " "
 	 << times[i];
     for (int j = 0; j < types; ++j) {
