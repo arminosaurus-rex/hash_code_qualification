@@ -190,6 +190,7 @@ void print_intermediate(const vector<Operation>& ops,
 	}
       }
     }
+    cout << endl;
   }
 }
 
