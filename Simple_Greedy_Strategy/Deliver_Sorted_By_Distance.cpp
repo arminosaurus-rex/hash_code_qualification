@@ -46,6 +46,9 @@ int distance_warehouse_customer(int whs, int cust){
   return compute_distance(row_warehouse[whs], col_warehouse[whs], row_customer[cust], col_customer[cust]);
 }
 
+int distance_warehouse_warehouse(int whs1, int whs2){
+  return compute_distance(row_warehouse[whs1], col_warehouse[whs1], row_warehouse[whs2], col_warehouse[whs2]);
+}
 int my_min(int a, int b){
   return a<b? a:b;
 }
@@ -66,13 +69,13 @@ int main(){
 
   // Warehouses
   scanf("%d ", &num_warehouses);
-  for(int i=0; i < num_warehouses; i++) scanf("%d %d ", &row_warehouse[i], &col_warehouse[i]);
-
   for(int whs=0; whs < num_warehouses; whs++){
-    for(int i=0; i < num_products; i++){
-      scanf("%d ", &availability_warehouses[whs][i]);
+    scanf("%d %d ", &row_warehouse[whs], &col_warehouse[whs]);
+    for(int j=0; j < num_products; j++){
+      scanf("%d ", &availability_warehouses[whs][j]);
     }
   }
+
 
   // Orders
   scanf("%d ", &num_customers);
@@ -92,7 +95,7 @@ int main(){
   // Greedy strategy: Choose the order that is satisfieable the quickest.
   for(int i=0; i<num_drones; i++){
     // Initially all drones are at warehouse zero and their initial time is 0
-    position_drones.push_back(make_pair(0, 0));
+    position_drones.push_back(make_pair(i % num_warehouses, distance_warehouse_warehouse(0, i % num_warehouses)));
   }
 
   int current_time = 0;
@@ -138,10 +141,12 @@ int main(){
         }
 
         if(current_load > 0){
+          printf(" %d %d %lf \n", current_load, max_load, (double)((1.0 * current_load) / (1.0 * max_load)));
           // Includes each load and delivery
           int time_to_deliver = 2 * load_operations + distance_warehouse_customer(current_warehouse, cust);
           // How long does the job take, who is the customer and which drone is used.
-          possible_jobs.push_back(make_pair(time_to_deliver, make_pair(cust, drn)));
+          int factor = time_to_deliver * num_orders_customer[cust];
+          possible_jobs.push_back(make_pair(factor, make_pair(cust, drn)));
         }
       }
     }
@@ -152,6 +157,7 @@ int main(){
     }
     sort(possible_jobs.begin(), possible_jobs.end());
 
+    //int choose = my_min(2, possible_jobs.size());
     PIPII nxt_job = possible_jobs[0];
 
     // Assemble the current job and send the drone off to some random warehouse
@@ -175,6 +181,7 @@ int main(){
       if(max_elements == 0) continue;
 
       current_load += max_elements * weight_products[prod];
+      //cout << current_warehouse << " " << prod << " " << availability_warehouses[current_warehouse][prod] << endl;
       string s = to_string(usd_drone) + " L " + to_string(position_drones[usd_drone].first) + " "  + to_string(prod) + " " + to_string(max_elements);
       output.push_back(s);
       //printf("%d L %d %d %d\n", usd_drone, position_drones[usd_drone].first, prod, max_elements);
@@ -193,26 +200,42 @@ int main(){
         output.push_back(s);
     }
 
+
+    int mx = 0;
+    int nwhs = 0;
+    for(int i=0; i<num_warehouses; i++){
+        int sum = 0;
+        for(int j=0; j<num_products; j++){
+          sum += availability_warehouses[i][j];
+        }
+        if(sum > mx){mx = sum; nwhs = i;}
+    }
+
     // Send the drone to a random warehouse.
-    int next_warehouse = rand() % num_warehouses;
+    int next_warehouse = nwhs; //current_warehouse;
     int travel_time = distance_warehouse_customer(next_warehouse, nxt_customer);
     int new_time = position_drones[usd_drone].second + nxt_job.first + travel_time;
     position_drones[usd_drone] = make_pair(next_warehouse, new_time);
 
   }
 
+/*
+  int not_served = 0;
   for(int i=0; i<num_customers; i++){
+    if(num_orders_customer[i] > 0) not_served += 1;
     printf("%d ", num_orders_customer[i]);
   }
   printf("\n");
 
+  printf("Not served: %d\n", not_served);
+*/
+
   //printf("%d\n", output.size());
-  /*
+
+
   cout << output.size() << endl;
   for(int i=0; i<output.size(); i++){
     cout << output[i] << endl;
   }
-  */
-
   return 0;
 }
